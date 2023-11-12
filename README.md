@@ -13,7 +13,7 @@ The dHCP deep learning (DL)-based neonatal cortical surface reconstruction pipel
 
 for neonatal structural brain MRI processing. The pipeline is accelerated by GPU and only requires ~30 seconds to process a single subject.
 
-![pipeline](./pipeline.png)
+![pipeline](./figure/pipeline.png)
 
 
 ## Installation
