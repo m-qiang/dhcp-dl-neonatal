@@ -17,6 +17,7 @@ from ants.utils.bias_correction import n4_bias_field_correction
 from seg.unet import UNet
 from surface.net import SurfDeform
 from sphere.net.sunet import SphereDeform
+from sphere.net.utils import get_neighs_order
 from sphere.net.loss import (
     edge_distortion,
     area_distortion)
@@ -110,9 +111,9 @@ nn_surf_right_pial.load_state_dict(
 
 # spherical projection
 nn_sphere_left = SphereDeform(
-    C_in=6, C_hid=[32, 64, 128, 256, 256], device=device)
+    C_in=18, C_hid=[32, 64, 128, 128, 128], device=device)
 nn_sphere_right = SphereDeform(
-    C_in=6, C_hid=[32, 64, 128, 256, 256], device=device)
+    C_in=18, C_hid=[32, 64, 128, 128, 128], device=device)
 
 nn_sphere_left.load_state_dict(
     torch.load('./sphere/model/model_hemi-left_sphere.pt', map_location=device))
@@ -170,6 +171,7 @@ vert_sphere_160k = sphere_160k.agg_data('pointset')
 face_160k = sphere_160k.agg_data('triangle')
 vert_sphere_160k = torch.Tensor(vert_sphere_160k[None]).to(device)
 face_160k = torch.LongTensor(face_160k[None]).to(device)
+neigh_order_160k = get_neighs_order()[0]  # neighbors
 
 
 # ============ load pre-computed barycentric coordinates ============
@@ -503,7 +505,16 @@ if __name__ == '__main__':
             # interpolate to 160k template
             vert_wm_160k = (vert_wm_orig[face_id] * bc_coord[...,None]).sum(-2)
             vert_wm_160k = torch.Tensor(vert_wm_160k[None]).to(device)
-            feat_160k = torch.cat([vert_sphere_160k, vert_wm_160k], dim=-1)
+            # input metric features
+            neigh_wm_160k = vert_wm_160k[:, neigh_order_160k].reshape(
+                vert_wm_160k.shape[0], vert_wm_160k.shape[1], 7, 3)[:,:,:-1]
+            edge_wm_160k = (neigh_wm_160k - vert_wm_160k[:,:,None]).norm(dim=-1)
+            area_wm_160k = 0.5*torch.norm(torch.cross(
+                neigh_wm_160k[:,:,[0,1,2,3,4,5]] - vert_wm_160k[:,:,None],
+                neigh_wm_160k[:,:,[1,2,3,4,5,0]] - vert_wm_160k[:,:,None]), dim=-1)
+            # final input features
+            feat_160k = torch.cat(
+                [vert_sphere_160k, vert_wm_160k, edge_wm_160k, area_wm_160k], dim=-1)
 
             with torch.no_grad():
                 vert_sphere = nn_sphere(

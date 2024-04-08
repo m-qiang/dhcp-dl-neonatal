@@ -148,19 +148,17 @@ class SphereDeform(nn.Module):
             './template/sphere_'+str(n_vert)+'.surf.gii').agg_data('pointset')
         self.vert_fixed = torch.Tensor(vert_fixed).float().to(device)
 
-        # load multiscale spherical u-net
         self.neigh_orders = get_neighs_order()
         upconv_top_index, upconv_down_index = get_upconv_index()
         
-        self.msunet = SUNet(
+        self.sunet = SUNet(
             C_in, C_hid, self.neigh_orders,
             upconv_top_index, upconv_down_index).to(device)
 
     def forward(self, feat_in, vert_in, n_steps=7):
-        svf = self.msunet(feat_in)
-        # project to tangent space
-#         svf = svf - self.vert_fixed * (svf * self.vert_fixed).sum(
-#             dim=-1, keepdim=True)
+        # predict velocity field
+        svf = self.sunet(feat_in)
+
         # integrate velocity field
         phi = self.integrate(svf, n_steps)
         
