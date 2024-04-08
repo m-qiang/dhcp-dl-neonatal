@@ -18,6 +18,7 @@ from torch.utils.data import Dataset, DataLoader
 
 from surface.net import SurfDeform
 from sphere.net.sunet import SphereDeform
+from sphere.net.utils import get_neighs_order
 from sphere.net.loss import(
     edge_distortion,
     area_distortion)
@@ -103,7 +104,7 @@ class SphereDataset(Dataset):
                 # pad the left hemisphere to full brain
                 vert_wm_in = vert_wm_in + [64,0,0]
             vert_wm_in = apply_affine_mat(vert_wm_in, affine_in)
-            # barycentric interpoalataionn: resample to 160k template
+            # barycentric interpoalataion: resample to 160k template
             vert_wm_160k = (vert_wm_in[face_id] * bc_coord[...,None]).sum(-2)        
             sphere_data = (vert_wm_in, vert_wm_160k)
             self.data_list.append(sphere_data)  # add to data list
@@ -156,10 +157,11 @@ def train_loop(args):
     face_160k = sphere_160k.agg_data('triangle')
     vert_sphere_160k = torch.Tensor(vert_sphere_160k[None]).to(device)
     face_160k = torch.LongTensor(face_160k[None]).to(device)
+    neigh_order_160k = get_neighs_order()[0]
     
     # ------ load model ------
     nn_sphere = SphereDeform(
-        C_in=6, C_hid=[32, 64, 128, 256, 256], device=device)
+        C_in=18, C_hid=[32, 64, 128, 128, 128], device=device)
     optimizer = optim.Adam(nn_sphere.parameters(), lr=lr)
 
     # ------ training loop ------ 
@@ -168,9 +170,23 @@ def train_loop(args):
         avg_loss = []
         for idx, data in enumerate(trainloader):
             vert_wm_in, vert_wm_160k = data
-            vert_wm_in = vert_wm_in.to(device).float()
-            vert_wm_160k = vert_wm_160k.to(device).float()
-            feat_160k = torch.cat([vert_sphere_160k, vert_wm_160k], dim=-1)
+            # input coordinates
+            vert_wm_in = vert_wm_in.to(device).float()  # (1,|V|,3)
+            vert_wm_160k = vert_wm_160k.to(device).float()  # (1,|V|,3)
+            
+            # input metric features
+            neigh_wm_160k = vert_wm_160k[:, neigh_order_160k].reshape(
+                vert_wm_160k.shape[0], vert_wm_160k.shape[1], 7, 3)[:,:,:-1]
+            # edge length (1,|V|,6)
+            edge_wm_160k = (neigh_wm_160k - vert_wm_160k[:,:,None]).norm(dim=-1)
+            # face area (1,|V|,6)
+            area_wm_160k = 0.5*torch.norm(torch.cross(
+                neigh_wm_160k[:,:,[0,1,2,3,4,5]] - vert_wm_160k[:,:,None],
+                neigh_wm_160k[:,:,[1,2,3,4,5,0]] - vert_wm_160k[:,:,None]), dim=-1)
+            
+            # final input features (1,|V|,18)
+            feat_160k = torch.cat(
+                [vert_sphere_160k, vert_wm_160k, edge_wm_160k, area_wm_160k], dim=-1)
 
             optimizer.zero_grad()
             vert_sphere_pred = nn_sphere(
@@ -198,7 +214,18 @@ def train_loop(args):
                     vert_wm_in, vert_wm_160k = data
                     vert_wm_in = vert_wm_in.to(device).float()
                     vert_wm_160k = vert_wm_160k.to(device).float()
-                    feat_160k = torch.cat([vert_sphere_160k, vert_wm_160k], dim=-1)
+                    
+                    # input metric features
+                    neigh_wm_160k = vert_wm_160k[:, neigh_order_160k].reshape(
+                        vert_wm_160k.shape[0], vert_wm_160k.shape[1], 7, 3)[:,:,:-1]
+                    edge_wm_160k = (neigh_wm_160k - vert_wm_160k[:,:,None]).norm(dim=-1)
+                    area_wm_160k = 0.5*torch.norm(torch.cross(
+                        neigh_wm_160k[:,:,[0,1,2,3,4,5]] - vert_wm_160k[:,:,None],
+                        neigh_wm_160k[:,:,[1,2,3,4,5,0]] - vert_wm_160k[:,:,None]), dim=-1)
+                    
+                    # final input features
+                    feat_160k = torch.cat(
+                        [vert_sphere_160k, vert_wm_160k, edge_wm_160k, area_wm_160k], dim=-1)
 
                     vert_sphere_pred = nn_sphere(
                         feat_160k, vert_sphere_in, n_steps=7)
