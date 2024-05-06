@@ -61,6 +61,8 @@ parser.add_argument('--T2', default='_T2w.nii.gz', type=str,
                     help='Suffix of T2 image file.')
 parser.add_argument('--T1', default='_T1w.nii.gz', type=str,
                     help='Suffix of T1 image file.')
+parser.add_argument('--sphere_proj', default='fs', type=str,
+                    help='The method of spherical projection: [fs, mds].')
 parser.add_argument('--device', default='cuda', type=str,
                     help='Device for running the pipeline: [cuda, cpu]')
 parser.add_argument('--verbose', action='store_true',
@@ -71,6 +73,7 @@ in_dir = args.in_dir
 out_dir = args.out_dir
 t2_suffix = args.T2
 t1_suffix = args.T1
+sphere_type = args.sphere_proj
 device = args.device
 verbose = args.verbose
 max_regist_iter = 5
@@ -110,15 +113,19 @@ nn_surf_right_pial.load_state_dict(
     torch.load('./surface/model/model_hemi-right_pial.pt', map_location=device))
 
 # spherical projection
+if sphere_type == 'fs':
+    C_in_sphere = 18
+elif sphere_type == 'mds':
+    C_in_sphere = 6
 nn_sphere_left = SphereDeform(
-    C_in=18, C_hid=[32, 64, 128, 128, 128], device=device)
+    C_in=C_in_sphere, C_hid=[32, 64, 128, 128, 128], device=device)
 nn_sphere_right = SphereDeform(
-    C_in=18, C_hid=[32, 64, 128, 128, 128], device=device)
+    C_in=C_in_sphere, C_hid=[32, 64, 128, 128, 128], device=device)
 
 nn_sphere_left.load_state_dict(
-    torch.load('./sphere/model/model_hemi-left_sphere.pt', map_location=device))
+    torch.load('./sphere/model/model_hemi-left_sphere_'+sphere_type+'.pt', map_location=device))
 nn_sphere_right.load_state_dict(
-    torch.load('./sphere/model/model_hemi-right_sphere.pt', map_location=device))
+    torch.load('./sphere/model/model_hemi-right_sphere_'+sphere_type+'.pt', map_location=device))
 
 
 # ============ load image atlas ============
@@ -155,12 +162,12 @@ face_right_in = torch.LongTensor(face_right_in[None]).to(device)
 
 # ============ load input sphere ============
 sphere_left_in = nib.load(
-    './template/dhcp_week-40_hemi-left_sphere.surf.gii')
+    './template/dhcp_week-40_hemi-left_sphere_'+sphere_type+'.surf.gii')
 vert_sphere_left_in = sphere_left_in.agg_data('pointset')
 vert_sphere_left_in = torch.Tensor(vert_sphere_left_in[None]).to(device)
 
 sphere_right_in = nib.load(
-    './template/dhcp_week-40_hemi-right_sphere.surf.gii')
+    './template/dhcp_week-40_hemi-right_sphere_'+sphere_type+'.surf.gii')
 vert_sphere_right_in = sphere_right_in.agg_data('pointset')
 vert_sphere_right_in = torch.Tensor(vert_sphere_right_in[None]).to(device)
 
@@ -176,11 +183,13 @@ neigh_order_160k = get_neighs_order()[0]  # neighbors
 
 # ============ load pre-computed barycentric coordinates ============
 # for sphere interpolation
-barycentric_left = nib.load('./template/dhcp_week-40_hemi-left_barycentric.gii')
+barycentric_left = nib.load(
+    './template/dhcp_week-40_hemi-left_barycentric_'+sphere_type+'.gii')
 bc_coord_left = barycentric_left.agg_data('pointset')
 face_left_id = barycentric_left.agg_data('triangle')
 
-barycentric_right = nib.load('./template/dhcp_week-40_hemi-right_barycentric.gii')
+barycentric_right = nib.load(
+    './template/dhcp_week-40_hemi-right_barycentric_'+sphere_type+'.gii')
 bc_coord_right = barycentric_right.agg_data('pointset')
 face_right_id = barycentric_right.agg_data('triangle')
 
@@ -505,16 +514,20 @@ if __name__ == '__main__':
             # interpolate to 160k template
             vert_wm_160k = (vert_wm_orig[face_id] * bc_coord[...,None]).sum(-2)
             vert_wm_160k = torch.Tensor(vert_wm_160k[None]).to(device)
-            # input metric features
-            neigh_wm_160k = vert_wm_160k[:, neigh_order_160k].reshape(
-                vert_wm_160k.shape[0], vert_wm_160k.shape[1], 7, 3)[:,:,:-1]
-            edge_wm_160k = (neigh_wm_160k - vert_wm_160k[:,:,None]).norm(dim=-1)
-            area_wm_160k = 0.5*torch.norm(torch.cross(
-                neigh_wm_160k[:,:,[0,1,2,3,4,5]] - vert_wm_160k[:,:,None],
-                neigh_wm_160k[:,:,[1,2,3,4,5,0]] - vert_wm_160k[:,:,None]), dim=-1)
-            # final input features
-            feat_160k = torch.cat(
-                [vert_sphere_160k, vert_wm_160k, edge_wm_160k, area_wm_160k], dim=-1)
+            if sphere_type == 'fs':
+                # input metric features
+                neigh_wm_160k = vert_wm_160k[:, neigh_order_160k].reshape(
+                    vert_wm_160k.shape[0], vert_wm_160k.shape[1], 7, 3)[:,:,:-1]
+                edge_wm_160k = (neigh_wm_160k - vert_wm_160k[:,:,None]).norm(dim=-1)
+                area_wm_160k = 0.5*torch.norm(torch.cross(
+                    neigh_wm_160k[:,:,[0,1,2,3,4,5]] - vert_wm_160k[:,:,None],
+                    neigh_wm_160k[:,:,[1,2,3,4,5,0]] - vert_wm_160k[:,:,None]), dim=-1)
+                # final input features
+                feat_160k = torch.cat(
+                    [vert_sphere_160k, vert_wm_160k, edge_wm_160k, area_wm_160k], dim=-1)
+            elif sphere_type == 'mds':
+                feat_160k = torch.cat(
+                    [vert_sphere_160k, vert_wm_160k], dim=-1)
 
             with torch.no_grad():
                 vert_sphere = nn_sphere(
