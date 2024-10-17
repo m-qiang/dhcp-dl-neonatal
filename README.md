@@ -1,5 +1,6 @@
 # dHCP Deep Learning-based Neonatal Pipeline
 
+[![arXiv](https://img.shields.io/badge/arXiv-2405.08783-red.svg)](https://arxiv.org/abs/2405.08783)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.13.0-brightgreen.svg)](https://pytorch.org/)
 [![PyTorch3D](https://img.shields.io/badge/PyTorch3D-0.7.2-yellow.svg)](https://pytorch3d.org/)
@@ -87,7 +88,7 @@ python train.py --seg_type='brain'\
                 --n_epoch=200
 ```
 
-where ```surf_type```={```brain```, ```ribbon```} is the type of the segmentation, ```tag``` is a string to identify different experiments, and ```n_epoch``` is the total training epochs. The training logs and model checkpoints will be saved to ```./seg/ckpts/```. After training, the model checkpoint with the best validation results will be selected and moved to 
+where ```surf_type={'brain','ribbon'}``` is the type of the segmentation, ```tag``` is a string to identify different experiments, and ```n_epoch``` is the total training epochs. The training logs and model checkpoints will be saved to ```./seg/ckpts/```. After training, the model checkpoint with the best validation results will be selected and moved to 
 ```
 ./seg/model/model_seg_brain.pt
 ```
@@ -129,7 +130,7 @@ python train.py --surf_type='wm'\
                 --w_nc=3.0\
                 --w_edge=0.3
 ```
-where ```surf_type```={```wm```, ```pial```} is the type of the surfaces, ```surf_hemi```={```left```,```right```} is the brain hemisphere, ```tag``` is a string to identify different experiments, ```n_epoch``` is the total training epochs, ```sigma``` is the standard deviation for Gaussian smoothing, ```w_nc``` is the weight of the normal consistency loss, and ```w_edge``` is the weight of the edge length loss.
+where ```surf_type={'wm','pial'}``` is the type of the surfaces, ```surf_hemi={'left','right'}``` is the brain hemisphere, ```tag``` is a string to identify different experiments, ```n_epoch``` is the total training epochs, ```sigma``` is the standard deviation for Gaussian smoothing, ```w_nc``` is the weight of the normal consistency loss, and ```w_edge``` is the weight of the edge length loss.
 
 All model checkpoints and training logs are saved to ```./surface/ckpts/```. After training, we select the model checkpoints with the best validation results and move them to 
 ```
@@ -173,7 +174,7 @@ python train.py --surf_hemi='left'\
                 --w_edge=1.0\
                 --w_area=0.5
 ```
-where ```surf_hemi```={```left```,```right```} is the brain hemisphere, ```w_edge``` and ```w_area``` are the weights for the edge and area distortion loss. After training, we move the best model checkpoints to 
+where ```surf_hemi={'left','right'}``` is the brain hemisphere, ```w_edge``` and ```w_area``` are the weights for the edge and area distortion loss. After training, we move the best model checkpoints to 
 ```
 ./sphere/model/model_hemi-left_sphere.pt
 ./sphere/model/model_hemi-right_sphere.pt
