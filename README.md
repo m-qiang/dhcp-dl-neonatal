@@ -1,5 +1,6 @@
 # dHCP Deep Learning-based Neonatal Pipeline
 
+[![arXiv](https://img.shields.io/badge/arXiv-2405.08783-red.svg)](https://arxiv.org/abs/2405.08783)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.13.0-brightgreen.svg)](https://pytorch.org/)
 
@@ -57,10 +58,11 @@ python run_pipeline.py --in_dir='/YOUR_INPUT_DIR/' \
                        --out_dir='/YOUR_OUTPUT_DIR/' \
                        --T2='_T2w.nii.gz' \
                        --T1='_T1w.nii.gz' \
+                       --sphere_proj='fs' \
                        --device='cuda:0'
 ```
 
-where ```in_dir``` is the directory containing the input images and ```out_dir``` is the directory to save the output files. ```T2``` and ```T1``` are the suffix of the input T2 and T1 images. The ```device``` tag indicates if the pipeline runs on a GPU or CPU. This command will process all subjects in ```in_dir``` and save your output files (surfaces, spheres, etc.) to
+where ```in_dir``` is the directory containing the input images and ```out_dir``` is the directory to save the output files. ```T2``` and ```T1``` are the suffix of the input T2 and T1 images. ```sphere_proj={'fs','mds'}``` specifies the method of learning-based spherical projection, where ```fs``` simulates the spherical mapping in FreeSurfer, and ```mds``` simulates the Spherical MDS approach used in [original dHCP pipeline](https://github.com/BioMedIA/dhcp-structural-pipeline). The ```device``` tag indicates if the pipeline runs on a GPU or CPU. This command will process all subjects in ```in_dir``` and save your output files (surfaces, spheres, etc.) to
 ```
 /YOUR_OUTPUT_DIR
     /sub1
